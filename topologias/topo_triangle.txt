@@ -1,0 +1,13 @@
+# Topologia 1: Triangle
+# 
+#      h2
+#      |
+#      s2
+#     /  \
+#   s1----s3
+#   |      |
+#   h1     h3
+# 
+s1 s2
+s2 s3
+s1 s3
