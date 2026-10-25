@@ -84,6 +84,7 @@ Para facilitar o entendimento didático da divisão entre o Plano de Controle e 
 ├── teste_topologia.py            # Instanciação Mininet (parser, OVS OF1.3, arping)
 ├── topo_discover.py              # Aplicação controladora Ryu (LLDP, GARP, log tabular)
 ├── export_topology_graph.py      # Renderizador NetworkX -> relatorio/img/ (300 DPI)
+├── run_experiments.sh            # Script de automação total dos testes e coleta de logs
 ├── devrefs/
 │   ├── especificacao.md          # Especificação original da atividade
 │   └── planejamento.md           # Planejamento completo de tarefas e decisões
@@ -139,20 +140,36 @@ As imagens serão salvas automaticamente em:
 
 ## 🚀 Como Executar os Experimentos
 
-Abra **dois terminais independentes**:
+Você pode executar os experimentos de duas formas:
 
-### Terminal 1 — Subir o Controlador Ryu
+### Opção 1 — Automação Completa (Recomendado) ⚡
 
+Utilize o script de orquestração que executa sequencialmente as topologias *Triangle* e *Someloops*, limpa o ambiente anterior com `mn -c`, salva os logs do Mininet e do Ryu em `relatorio/logs/` e atualiza as imagens do NetworkX:
+
+```bash
+./run_experiments.sh
+```
+
+Os logs consolidados serão gerados em:
+* `relatorio/logs/ryu_triangle.log` e `relatorio/logs/mininet_triangle.log`
+* `relatorio/logs/ryu_someloops.log` e `relatorio/logs/mininet_someloops.log`
+
+---
+
+### Opção 2 — Execução Interativa (Dois Terminais) 🖥️
+
+Caso queira inspecionar visualmente o console do Ryu ou acessar o prompt `mininet>`:
+
+#### Terminal 1 — Subir o Controlador Ryu:
 ```bash
 # Ativa o ambiente dedicado do Ryu
 source .venv-ryu/bin/activate
 
-# Executa com descoberta de topologia habilitada
+# Executa com descoberta ativa de enlaces LLDP
 ryu-manager --observe-links topo_discover.py
 ```
 
-### Terminal 2 — Instanciar a Topologia no Mininet
-
+#### Terminal 2 — Instanciar a Topologia no Mininet:
 No terminal do sistema (**sem** ativar o venv do Ryu):
 
 ```bash
@@ -163,7 +180,7 @@ sudo python3 teste_topologia.py topologias/topo_triangle.txt
 sudo python3 teste_topologia.py topologias/topo_someloops.txt
 ```
 
-> **Dica:** Para testes automatizados sem abrir o prompt interativo do Mininet, adicione o parâmetro `--no-cli`:
+> **Dica:** Para rodar sem abrir o prompt interativo do Mininet, passe `--no-cli`:
 > ```bash
 > sudo python3 teste_topologia.py topologias/topo_triangle.txt --no-cli
 > ```
