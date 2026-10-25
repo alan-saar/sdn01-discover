@@ -92,7 +92,13 @@ class TopoDiscover(app_manager.RyuApp):
 
         # Instala a regra Table-Miss na tabela 0 com a menor prioridade possível (0)
         self.add_flow(datapath, priority=0, match=match, actions=actions)
-        self.logger.info("[Handshake] Switch s%s conectado. Regra Table-Miss instalada.", datapath.id)
+
+        # Regra explícita de alta prioridade para interceptar pacotes ARP (Gratuitous ARP / Request / Reply)
+        # Garante que qualquer tráfego ARP seja desviado diretamente ao controlador para descoberta de hosts
+        match_arp = parser.OFPMatch(eth_type=0x0806)
+        self.add_flow(datapath, priority=10, match=match_arp, actions=actions)
+
+        self.logger.info("[Handshake] Switch s%s conectado. Regras Table-Miss e ARP intercept instaladas.", datapath.id)
 
     def add_flow(self, datapath, priority, match, actions):
         """

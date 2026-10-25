@@ -27,6 +27,15 @@ import os
 import re
 from time import sleep
 
+# Compatibilidade Arch Linux / mise: adiciona caminho do mininet se não estiver no sys.path padrão
+for _p in [
+    '/usr/lib/python3.15/site-packages',
+    os.path.expanduser('~/.local/share/mise/installs/python/3.15.0/lib/python3.15/site-packages'),
+    '/home/saar/.local/share/mise/installs/python/3.15.0/lib/python3.15/site-packages'
+]:
+    if os.path.exists(_p) and _p not in sys.path:
+        sys.path.append(_p)
+
 
 def log_msg(msg):
     """Encaminha mensagem para o logger do Mininet se disponível, ou print comum."""
@@ -180,10 +189,16 @@ def start_network(edge_list_file, interactive=True):
     log_msg("=======================================================\n")
     for h in net.hosts:
         raw_ip = h.IP()
-        log_msg(f"[Mininet Host {h.name}] Executando: arping -U -c 1 {raw_ip}\n")
+        intf_name = h.defaultIntf().name if hasattr(h, 'defaultIntf') else f"{h.name}-eth0"
+        log_msg(f"[Mininet Host {h.name}] Executando: arping -U -c 1 -I {intf_name} {raw_ip}\n")
         # -U: Modo Unsolicited ARP (Gratuitous ARP)
+        # -I: Interface física virtual (ex: h1-eth0) conectada ao switch
         # -c 1: Envia exatamente 1 pacote
-        cmd_output = h.cmd(f'arping -U -c 1 {raw_ip}')
+        cmd_output = h.cmd(f'arping -U -c 1 -I {intf_name} {raw_ip}')
+        if cmd_output.strip():
+            log_msg(f"                     [arping] {cmd_output.strip().splitlines()[0]}\n")
+        # Também executa -A (ARP Answer mode) para compatibilidade universal entre variantes do arping
+        h.cmd(f'arping -A -c 1 -I {intf_name} {raw_ip}')
         sleep(0.15)
 
     log_msg("\n[Mininet] Todos os pacotes Gratuitous ARP foram transmitidos com sucesso!\n")

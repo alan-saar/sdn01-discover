@@ -85,6 +85,7 @@ Para facilitar o entendimento didático da divisão entre o Plano de Controle e 
 ├── topo_discover.py              # Aplicação controladora Ryu (LLDP, GARP, log tabular)
 ├── export_topology_graph.py      # Renderizador NetworkX -> relatorio/img/ (300 DPI)
 ├── run_experiments.sh            # Script de automação total dos testes e coleta de logs
+├── gerar_relatorio.sh            # Compilador automatizado do relatório em Typst (com suporte a --watch)
 ├── devrefs/
 │   ├── especificacao.md          # Especificação original da atividade
 │   └── planejamento.md           # Planejamento completo de tarefas e decisões
@@ -214,15 +215,19 @@ Quando os pacotes LLDP mapearem os enlaces e os Gratuitous ARPs forem intercepta
 
 ## 📄 Compilação do Relatório Técnico
 
-O relatório técnico é escrito em **Typst** e utiliza o modelo oficial do IFES:
+O relatório técnico é escrito em **Typst** e utiliza o modelo oficial do IFES. Para compilá-lo com um único comando:
 
 ```bash
-typst compile relatorio/relatorio.typ relatorio/relatorio.pdf
+# Compilação padrão (gera relatorio/relatorio.pdf)
+./gerar_relatorio.sh
+
+# Modo contínuo (live-reload enquanto edita o .typ)
+./gerar_relatorio.sh --watch
 ```
 
-Para visualizar continuamente enquanto edita:
+Também é possível compilar diretamente via utilitário nativo do Typst:
 ```bash
-typst watch relatorio/relatorio.typ relatorio/relatorio.pdf
+typst compile relatorio/relatorio.typ relatorio/relatorio.pdf
 ```
 
 ---

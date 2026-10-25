@@ -68,11 +68,11 @@ run_scenario() {
 
     # Executa o Mininet em modo não-interativo (--no-cli) para automação
     echo "[*] Executando Mininet com a topologia $TOPO_FILE..."
-    sudo python3 teste_topologia.py "$TOPO_FILE" --no-cli | tee "$MN_LOG"
+    sudo PYTHONPATH="/usr/lib/python3.15/site-packages:$PYTHONPATH" python3 -u teste_topologia.py "$TOPO_FILE" --no-cli 2>&1 | tee "$MN_LOG"
 
     # Aguarda convergência final das mensagens OpenFlow
     echo "[*] Aguardando acomodação final das mensagens de controle..."
-    sleep 3
+    sleep 4
 
     # Encerra o controlador Ryu de forma limpa
     echo "[*] Finalizando processo do Ryu (PID $RYU_PID)..."
