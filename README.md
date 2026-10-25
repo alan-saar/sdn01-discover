@@ -28,18 +28,18 @@
 
 ---
 
-## ⚡ Visão Geral
+## Visão Geral
 
 Solução completa para **instanciação dinâmica, descoberta ativa de enlaces e mapeamento de estações em SDN**, combinando:
 1. **Mininet:** Leitura e instanciação dinâmica de grafos arbitrários a partir de listas de arestas (`topo_*.txt`) com switches Open vSwitch (OVS).
-2. **Ryu Controller:** Descoberta de enlaces físicos inter-switch via injeção periódica de pacotes **LLDP** (`--observe-links`) e consumo de eventos `EventSwitchEnter` e `EventLinkAdd`.
-3. **Mapeamento Passivo de Hosts:** Descoberta de terminais por interceptação controlada de pacotes **Gratuitous ARP (GARP)** via mensagens OpenFlow `Packet-In`, suprimindo transmissões em *broadcast* e evitando *broadcast storms* em topologias cíclicas.
-4. **Modelagem em Grafos (NetworkX):** Renderização automática da topologia física $G = (V, E)$ em imagens de alta definição (300 DPI).
+2. **Ryu Controller:** Descoberta de enlaces físicos inter-switch via injeção periódica de pacotes **LLDP** (*Link Layer Discovery Protocol*) utilizando a flag `--observe-links` e tratamento dos eventos `EventSwitchEnter` e `EventLinkAdd`.
+3. **Mapeamento Passivo de Hosts:** Descoberta de terminais por interceptação controlada de pacotes **Gratuitous ARP (GARP)** via mensagens OpenFlow `Packet-In`, suprimindo o *flooding* em broadcast e eliminando tempestades de broadcast (*broadcast storms*) em topologias cíclicas.
+4. **Modelagem em Grafos (NetworkX):** Renderização automática da topologia física $G = (V, E)$ a partir das descobertas em imagens de alta definição (300 DPI).
 5. **Relatório Técnico em Typst:** Documentação acadêmica estruturada sobre o modelo institucional `IFES-DOC`.
 
 ---
 
-## 🏛️ A Analogia do Galpão e dos Funcionários
+## A Analogia do Galpão e dos Funcionários
 
 Para facilitar o entendimento didático da divisão entre o Plano de Controle e o Plano de Dados:
 
@@ -70,11 +70,11 @@ Para facilitar o entendimento didático da divisão entre o Plano de Controle e 
 * **Os Funcionários Luiz e Flávio (Switches):** Ficam trancados em salas de triagem com portas numeradas, cumprindo estritamente as ordens da tabela de regras (*Flow Table*).
 * **Os Tubos Pneumáticos (Cabos de Rede):** Interligam as portas das salas.
 * **O Bilhete nos Tubos (Pacote LLDP):** O Gerente manda Luiz jogar um bilhete pelo tubo da Porta 1; quando o bilhete cai na sala de Flávio, Flávio liga para a gerência avisando: *o enlace entre Luiz e Flávio existe!*
-* **O Cartão de Visitas do Cliente (Gratuitous ARP):** Ao se plugar à sala de Luiz, o cliente entrega seu cartão (MAC e IP). Luiz não sai gritando pelo prédio (*flooding*); ele repassa a correspondência em envelope fechado ao Gerente (`Packet-In`).
+* **O Cartão de Visitas do Cliente (Gratuitous ARP):** Ao se plugar à sala de Luiz, o cliente entrega seu cartão (MAC e IP). Luiz não propaga aos outros tubos (*flooding*); ele repassa a correspondência em envelope fechado ao Gerente (`Packet-In`).
 
 ---
 
-## 📂 Estrutura do Repositório
+## Estrutura do Repositório
 
 ```text
 .
@@ -100,15 +100,15 @@ Para facilitar o entendimento didático da divisão entre o Plano de Controle e 
 
 ---
 
-## 🛠️ Configuração do Ambiente no Arch / Omarchy Linux
+## Configuração do Ambiente no Arch Linux
 
-O Mininet opera no espaço de kernel com o Python nativo do Arch Linux, enquanto o Ryu requer bibliotecas legadas (`eventlet==0.30.2`, `setuptools<58`), necessitando do Python 3.9. 
+O Mininet opera no espaço de kernel com o Python nativo do Arch Linux (3.15), enquanto o Ryu requer bibliotecas legadas (`eventlet==0.30.2`, `setuptools<58`), necessitando do Python 3.9. 
 
-Graças ao desacoplamento do OpenFlow, **eles rodam em ambientes separados e conversam via rede TCP (127.0.0.1:6633)**.
+Graças ao desacoplamento do OpenFlow, **eles rodam em ambientes separados e comunicam-se via rede TCP (127.0.0.1:6633)**.
 
 ### 1. Preparar o venv do Ryu com `uv`
 
-Utilize o gerenciador ultra-rápido `uv`:
+Utilize o gerenciador `uv`:
 
 ```bash
 # 1. Cria o ambiente virtual com Python 3.9
@@ -140,11 +140,11 @@ As imagens serão salvas automaticamente em:
 
 ---
 
-## 🚀 Como Executar os Experimentos
+## Como Executar os Experimentos
 
 Você pode executar os experimentos de duas formas:
 
-### Opção 1 — Automação Completa (Recomendado) ⚡
+### Opção 1 — Automação Completa (Recomendado)
 
 Utilize o script de orquestração que executa sequencialmente as topologias *Triangle* e *Someloops*, limpa o ambiente anterior com `mn -c`, salva os logs do Mininet e do Ryu em `relatorio/logs/` e atualiza as imagens do NetworkX:
 
@@ -158,7 +158,7 @@ Os logs consolidados serão gerados em:
 
 ---
 
-### Opção 2 — Execução Interativa (Dois Terminais) 🖥️
+### Opção 2 — Execução Interativa (Dois Terminais)
 
 Caso queira inspecionar visualmente o console do Ryu ou acessar o prompt `mininet>`:
 
@@ -189,7 +189,7 @@ sudo python3 teste_topologia.py topologias/topo_someloops.txt
 
 ---
 
-## 📊 Saída Esperada no Log do Ryu
+## Saída Esperada no Log do Ryu
 
 Quando os pacotes LLDP mapearem os enlaces e os Gratuitous ARPs forem interceptados, o Ryu imprimirá no console a topologia completa consolidada:
 
@@ -214,7 +214,7 @@ Quando os pacotes LLDP mapearem os enlaces e os Gratuitous ARPs forem intercepta
 
 ---
 
-## 📄 Compilação do Relatório Técnico
+## Compilação do Relatório Técnico
 
 O relatório técnico é escrito em **Typst** e utiliza o modelo oficial do IFES. Para compilá-lo com um único comando:
 
@@ -232,22 +232,6 @@ typst compile relatorio/relatorio.typ relatorio/relatorio.pdf
 ```
 
 ---
-
-## 📦 Empacotamento para Submissão no AVA / Moodle
-
-Para validar todos os artefatos obrigatórios e gerar o arquivo ZIP de entrega exigido pela disciplina:
-
-```bash
-./empacotar_entrega.sh
-```
-
-Esse script realiza:
-1. A recompilação do relatório em PDF com dados atualizados;
-2. A validação de integridade dos 16 arquivos obrigatórios;
-3. A criação do arquivo compactado `trab-sdn-01-alan-leonardo.zip`, expurgando arquivos temporários e virtuais.
-
----
-
-## 📜 Licença
+## Licença
 
 Projeto desenvolvido para fins educacionais e de pesquisa no Programa de Pós-Graduação em Informática (PPCOMP - IFES). Licenciado sob a licença MIT.
