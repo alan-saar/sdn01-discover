@@ -2,3 +2,4 @@ devrefs
 __pycache__/
 *.pyc
 .venv*
+*.zip

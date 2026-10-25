@@ -86,6 +86,7 @@ Para facilitar o entendimento didático da divisão entre o Plano de Controle e 
 ├── export_topology_graph.py      # Renderizador NetworkX -> relatorio/img/ (300 DPI)
 ├── run_experiments.sh            # Script de automação total dos testes e coleta de logs
 ├── gerar_relatorio.sh            # Compilador automatizado do relatório em Typst (com suporte a --watch)
+├── empacotar_entrega.sh          # Script de validação e geração do pacote ZIP para o AVA / Moodle
 ├── devrefs/
 │   ├── especificacao.md          # Especificação original da atividade
 │   └── planejamento.md           # Planejamento completo de tarefas e decisões
@@ -229,6 +230,21 @@ Também é possível compilar diretamente via utilitário nativo do Typst:
 ```bash
 typst compile relatorio/relatorio.typ relatorio/relatorio.pdf
 ```
+
+---
+
+## 📦 Empacotamento para Submissão no AVA / Moodle
+
+Para validar todos os artefatos obrigatórios e gerar o arquivo ZIP de entrega exigido pela disciplina:
+
+```bash
+./empacotar_entrega.sh
+```
+
+Esse script realiza:
+1. A recompilação do relatório em PDF com dados atualizados;
+2. A validação de integridade dos 16 arquivos obrigatórios;
+3. A criação do arquivo compactado `trab-sdn-01-alan-leonardo.zip`, expurgando arquivos temporários e virtuais.
 
 ---
 
