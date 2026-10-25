@@ -20,15 +20,15 @@ Em contrapartida, a arquitetura SDN preconiza quatro preceitos basilares:
 1. *Desacoplamento Físico e Lógico:* A inteligência da rede é extraída dos dispositivos de comutação e centralizada logicamente em uma entidade coordenadora denominada *Controlador SDN*.
 2. *Switches Baseados em Fluxos:* Equipamentos de encaminhamento (comutadores OpenFlow) operam de forma reativa ou proativa com base em tabelas de fluxos (_Flow Tables_), realizando apenas o chaveamento de alta velocidade orientado pelo controlador.
 3. *Visão Global e Centralizada:* O controlador atua como um Sistema Operacional de Rede (_Network Operating System_ -- NOS), mantendo uma representação abstrata completa de todos os nós e enlaces.
-4. *Programabilidade por Software:* A rede é gerenciada programmaticamente por meio de interfaces abertas (_Southbound APIs_, como o OpenFlow 1.3).
+4. *Programabilidade por Software:* A rede é gerenciada programmaticamente por meio de interfaces abertas (também chamadas de _Southbound APIs_, como o OpenFlow 1.3).
 
 #box-def(title: "O Dilema Fundamental da Descoberta em SDN")[
-  Em redes comutadas convencionais, switches operam de forma autônoma: eles escutam o tráfego de dados e alimentam tabelas de aprendizado de MAC (_MAC learning_). Em uma rede SDN pura, os comutadores são componentes sem inteligência própria de roteamento; ao ligar a alimentação, o switch OpenFlow desconhece completamente a quais vizinhos está conectado. 
-  
+  Em redes comutadas convencionais, switches operam de forma autônoma: eles escutam o tráfego de dados e alimentam tabelas de aprendizado de MAC (_MAC learning_). Em uma rede SDN pura, os comutadores são componentes sem inteligência própria de roteamento; ao ligar a alimentação, o switch OpenFlow desconhece completamente a quais vizinhos está conectado.
+
   Portanto, é responsabilidade indelegável do *Controlador SDN* sondar o plano de dados, injetar pacotes de descoberta e reconstruir o grafo da topologia física.
 ]
 
-O presente trabalho técnico documenta a implementação de um sistema robusto de leitura, instanciação e descoberta dinâmica de topologias em SDN utilizando o framework *Ryu* (operando sobre OpenFlow 1.3) e o ambiente de emulação *Mininet*. O foco deste estudo concentra-se no mapeamento de enlaces inter-switch via pacotes *LLDP* e na localização passiva de estações hospedeiras (_hosts_) mediante *Gratuitous ARP*, com ênfase especial na contenção de tempestades de broadcast em topologias com múltiplos ciclos (*Triangle* e *Someloops*).
+O presente trabalho técnico documenta a implementação de um sistema robusto de leitura, instanciação e descoberta dinâmica de topologias em SDN utilizando o framework *Ryu* (operando sobre OpenFlow 1.3) e o ambiente de emulação *Mininet*. O foco deste estudo concentra-se no mapeamento de enlaces inter-switch via pacotes *LLDP* (_Link Layer Discovery Protocol_) e na localização passiva de estações hospedeiras (_hosts_) mediante *Gratuitous ARP* (GARP), com ênfase especial na contenção de tempestades de broadcast (_broadcast storm_) em topologias com múltiplos ciclos (*Triangle* e *Someloops*).
 
 ---
 
@@ -36,16 +36,16 @@ O presente trabalho técnico documenta a implementação de um sistema robusto d
 
 == O Protocolo LLDP e o Mecanismo OFDP
 
-Para mapear enlaces físicos entre switches sem intervenção manual, os controladores SDN empregam uma adaptação do protocolo *LLDP* (_Link Layer Discovery Protocol_, norma IEEE 802.1AB), frequentemente denominada na literatura técnica como *OFDP* (_OpenFlow Discovery Protocol_).
+Para mapear enlaces físicos entre switches sem intervenção manual, os controladores SDN empregam uma adaptação do protocolo *LLDP*, frequentemente denominada na literatura técnica como *OFDP* (_OpenFlow Discovery Protocol_).
 
-O protocolo LLDP opera estritamente na camada de enlace (EtherType `0x88CC`) e utiliza estruturas do tipo TLV (_Type-Length-Value_) para transportar dados de identificação, tais como o Chassis ID e o Port ID.
+O protocolo LLDP opera estritamente na camada de enlace utilizando quadros Ethernet com identificador de protocolo EtherType `0x88CC` (padronizado pela norma IEEE 802.1AB), e emprega estruturas do tipo TLV (_Type-Length-Value_) para transportar dados de identificação, tais como o Chassis ID e o Port ID.
 
 O ciclo operacional de descoberta via LLDP ocorre em quatro etapas sequenciais:
 
-+ *Geração do Pacote pelo Controlador:* O Ryu gera um quadro Ethernet com EtherType `0x88CC`. No payload TLV, o Ryu insere o identificador único do switch de origem (`src_dpid`) e a porta de transmissão (`src_port_no`).
++ *Geração do Pacote pelo Controlador:* O Ryu gera um quadro LLDP com cabeçalho Ethernet apropriado. No payload TLV, o Ryu insere o identificador único do switch de origem (`src_dpid`) e a porta de transmissão (`src_port_no`).
 + *Injeção via `Packet-Out`:* O controlador encapsula esse pacote em uma mensagem OpenFlow `OFPT_PACKET_OUT` e a envia ao switch de origem, instruindo-o a ejetar o quadro pela porta física sob sondagem.
 + *Transmissão no Cabo Físico:* O switch de origem transmite o quadro através do enlace em direção ao switch adjacente.
-+ *Interceptação via `Packet-In`:* O switch vizinho recebe o quadro em uma de suas portas. Por possuir uma regra de fluxo que associa o EtherType `0x88CC` à ação `OFPP_CONTROLLER`, o switch não encaminha o pacote pela rede; em vez disso, encapsula o quadro em uma mensagem `OFPT_PACKET_IN` e o remete ao Ryu.
++ *Interceptação via `Packet-In`:* O switch vizinho recebe o quadro em uma de suas portas. Por possuir uma regra de fluxo que associa esses quadros de descoberta LLDP à ação `OFPP_CONTROLLER`, o switch não encaminha o pacote pela rede; em vez disso, encapsula o quadro em uma mensagem `OFPT_PACKET_IN` e o remete ao Ryu.
 
 Ao inspecionar a mensagem `Packet-In`, o controlador correlaciona os metadados:
 #formula[
@@ -69,7 +69,7 @@ Na aplicação de monitoramento, podemos capturar esses eventos e invocar as fun
 
 #box-note(title: "Analogia Didática: O Galpão e os Funcionários (Luiz e Flávio)")[
   Para ilustrar esse processo, imagine uma grande central de distribuição:
-  
+
   - *O Gerente Geral (Controlador Ryu):* Senta-se em uma torre de controle envidraçada com visão panorâmica, comunicando-se por rádio exclusivo com suas salas de triagem.
   - *Os Funcionários Luiz ($s_1$) e Flávio ($s_2$):* São operadores zelosos trancados em salas isoladas. Cada sala possui várias portas numeradas com tubos pneumáticos interligando as salas. Luiz e Flávio não sabem onde os tubos vão dar.
   - *A Flag `--observe-links`:* É a ordem matinal do Gerente: _"Equipe de mensageiros, ativem-se e comecem a soltar os bilhetes pelos tubos!"_.
@@ -83,9 +83,9 @@ Na aplicação de monitoramento, podemos capturar esses eventos e invocar as fun
 
 == O Mecanismo do Gratuitous ARP (GARP)
 
-Enquanto a infraestrutura de cabeamento entre switches é descoberta pelo LLDP, as estações de trabalho e servidores finais (_hosts_) não processam pacotes LLDP. Tradicionalmente, redes Ethernet descobrem máquinas no momento em que elas realizam requisições de broadcast (ARP Request) para localizar outros nós.
+Enquanto a infraestrutura de cabeamento entre switches é descoberta pelo LLDP, as estações de trabalho e servidores finais não processam pacotes LLDP. Tradicionalmente, redes Ethernet descobrem máquinas no momento em que elas realizam requisições de broadcast (ARP Request) para localizar outros nós.
 
-Entretanto, em redes SDN recém-iniciadas nas quais os hosts ainda não iniciaram comunicação mútua, faz-se necessária uma técnica ativa de anúncio de presença. A abordagem ideal é a emissão de pacotes *Gratuitous ARP* (GARP), gerados através da ferramenta de rede `arping`:
+Entretanto, em redes SDN recém-iniciadas nas quais os hosts ainda não iniciaram comunicação mútua, faz-se necessária uma técnica ativa de anúncio de presença. A abordagem ideal é a emissão de pacotes *Gratuitous ARP*, gerados através da ferramenta de rede `arping`:
 
 ```bash
 arping -U -c 1 <IP_DO_HOST>
@@ -98,7 +98,7 @@ Tecnicamente, o Gratuitous ARP é um quadro Ethernet do tipo `0x0806` cujo cabe�
 
 == Interceptação de Pacotes via `Packet-In` e Eliminação de Loops
 
-Em switches não gerenciados convencionais, um quadro recebido com destino `ff:ff:ff:ff:ff:ff` é compulsoriamente retransmitido por todas as demais portas ativas (_flooding_). Caso a topologia física contenha ciclos fechados (como as topologias _Triangle_ e _Someloops_), esse pacote entraria em replicação infinita, deflagrando uma *tempestade de broadcast* (_broadcast storm_) capaz de saturar os buffers e congelar a emulação.
+Em switches não gerenciados convencionais, um quadro recebido com destino `ff:ff:ff:ff:ff:ff` é compulsoriamente retransmitido por todas as demais portas ativas (_flooding_). Caso a topologia física contenha ciclos fechados (como as topologias _Triangle_ e _Someloops_), esse pacote entraria em replicação infinita, deflagrando uma *tempestade de broadcast* capaz de saturar os buffers e congelar a emulação.
 
 No ambiente SDN implementado, essa vulnerabilidade é neutralizada na raiz através da *regra padrão de Table-Miss* instalada na tabela de fluxos (`Table 0`) dos comutadores:
 
@@ -116,7 +116,7 @@ Quando o host injeta o Gratuitous ARP no cabo:
 
 #box-tip(title: "Analogia Didática: O Cartão de Visitas na Recepção")[
   Continuando na analogia do galpão:
-  - Quando um novo cliente chega à empresa (Host $h_1$), em vez de pegar um megafone e gritar pelos corredores em broadcast perturbando todos os setores, ele simplesmente entrega um *cartão de visitas não solicitado* (Gratuitous ARP) por debaixo da porta da sala de Luiz.
+  - Quando um novo cliente chega à empresa (Host $h_1$), em vez de pegar um megafone e gritar pelos corredores em broadcast perturbando todos os setores, ele simplesmente entrega um *cartão de visitas não solicitado* (GARP) por debaixo da porta da sala de Luiz.
   - Luiz lê o cartão com o nome e o ramal do cliente, não repassa para os tubos vizinhos, coloca em um envelope confidencial e despacha diretamente ao Gerente Geral (`Packet-In`).
   - O Gerente Geral adiciona o cliente em seu livro de registros sem que ninguém no galpão tenha sofrido com poluição sonora ou tempestades de papéis.
 ]
@@ -184,15 +184,36 @@ A topologia *Triangle* consiste em um ciclo simples com 3 switches e 3 hosts con
 #styled-table(
   headers: ([Elemento], [Especificação Teórica], [Mapeamento Descoberto pelo Ryu], [Status]),
   rows: (
-    [Switches Ativos], [$s_1, s_2, s_3$], [DPID 1, DPID 2, DPID 3], [Consistente],
-    [Enlace Inter-Switch], [$s_1 <---> s_2$], [$s_1$ (Porta 1) $<=====>$ $s_2$ (Porta 1)], [Validado],
-    [Enlace Inter-Switch], [$s_2 <---> s_3$], [$s_2$ (Porta 2) $<=====>$ $s_3$ (Porta 1)], [Validado],
-    [Enlace Inter-Switch], [$s_1 <---> s_3$], [$s_1$ (Porta 2) $<=====>$ $s_3$ (Porta 2)], [Validado],
-    [Host $h_1$], [10.0.0.1 em $s_1$], [IP 10.0.0.1, MAC 00:00:00:00:00:01 em $s_1$:Porta 3], [Identificado],
-    [Host $h_2$], [10.0.0.2 em $s_2$], [IP 10.0.0.2, MAC 00:00:00:00:00:02 em $s_2$:Porta 3], [Identificado],
-    [Host $h_3$], [10.0.0.3 em $s_3$], [IP 10.0.0.3, MAC 00:00:00:00:00:03 em $s_3$:Porta 3], [Identificado],
+    [Switches Ativos],
+    [$s_1, s_2, s_3$],
+    [DPID 1, DPID 2, DPID 3],
+    [Consistente],
+    [Enlace Inter-Switch],
+    [$s_1 <---> s_2$],
+    [$s_1$ (Porta 1) $<=====>$ $s_2$ (Porta 1)],
+    [Validado],
+    [Enlace Inter-Switch],
+    [$s_2 <---> s_3$],
+    [$s_2$ (Porta 2) $<=====>$ $s_3$ (Porta 1)],
+    [Validado],
+    [Enlace Inter-Switch],
+    [$s_1 <---> s_3$],
+    [$s_1$ (Porta 2) $<=====>$ $s_3$ (Porta 2)],
+    [Validado],
+    [Host $h_1$],
+    [10.0.0.1 em $s_1$],
+    [IP 10.0.0.1, MAC 00:00:00:00:00:01 em $s_1$:Porta 3],
+    [Identificado],
+    [Host $h_2$],
+    [10.0.0.2 em $s_2$],
+    [IP 10.0.0.2, MAC 00:00:00:00:00:02 em $s_2$:Porta 3],
+    [Identificado],
+    [Host $h_3$],
+    [10.0.0.3 em $s_3$],
+    [IP 10.0.0.3, MAC 00:00:00:00:00:03 em $s_3$:Porta 3],
+    [Identificado],
   ),
-  col-widths: (1.5fr, 2fr, 3fr, 1.2fr)
+  col-widths: (1.5fr, 2fr, 3fr, 1.2fr),
 )
 
 === Logs de Execução e Evidências Empíricas (Triangle)
@@ -303,18 +324,48 @@ A topologia *Someloops* apresenta alta densidade de malha, contendo múltiplos c
 #styled-table(
   headers: ([Enlace / Nó], [Especificação Teórica], [Descoberta do Controlador Ryu], [Resultado]),
   rows: (
-    [Switches Ativos], [6 Switches ($s_1$ a $s_6$)], [DPID 1, 2, 3, 4, 5, 6], [Consistente],
-    [Enlace 1], [$s_1 <---> s_2$], [$s_1$ (Porta 1) $<=====>$ $s_2$ (Porta 1)], [Confirmado],
-    [Enlace 2], [$s_1 <---> s_4$], [$s_1$ (Porta 2) $<=====>$ $s_4$ (Porta 1)], [Confirmado],
-    [Enlace 3], [$s_1 <---> s_5$], [$s_1$ (Porta 3) $<=====>$ $s_5$ (Porta 1)], [Confirmado],
-    [Enlace 4], [$s_2 <---> s_4$], [$s_2$ (Porta 2) $<=====>$ $s_4$ (Porta 2)], [Confirmado],
-    [Enlace 5], [$s_2 <---> s_6$], [$s_2$ (Porta 3) $<=====>$ $s_6$ (Porta 1)], [Confirmado],
-    [Enlace 6], [$s_3 <---> s_4$], [$s_3$ (Porta 1) $<=====>$ $s_4$ (Porta 3)], [Confirmado],
-    [Enlace 7], [$s_3 <---> s_5$], [$s_3$ (Porta 2) $<=====>$ $s_5$ (Porta 2)], [Confirmado],
-    [Enlace 8], [$s_4 <---> s_6$], [$s_4$ (Porta 4) $<=====>$ $s_6$ (Porta 2)], [Confirmado],
-    [Total de Hosts], [6 Servidores ($h_1$ a $h_6$)], [IPs 10.0.0.1 a 10.0.0.6 nas respectivas portas], [100% Mapeado],
+    [Switches Ativos],
+    [6 Switches ($s_1$ a $s_6$)],
+    [DPID 1, 2, 3, 4, 5, 6],
+    [Consistente],
+    [Enlace 1],
+    [$s_1 <---> s_2$],
+    [$s_1$ (Porta 1) $<=====>$ $s_2$ (Porta 1)],
+    [Confirmado],
+    [Enlace 2],
+    [$s_1 <---> s_4$],
+    [$s_1$ (Porta 2) $<=====>$ $s_4$ (Porta 1)],
+    [Confirmado],
+    [Enlace 3],
+    [$s_1 <---> s_5$],
+    [$s_1$ (Porta 3) $<=====>$ $s_5$ (Porta 1)],
+    [Confirmado],
+    [Enlace 4],
+    [$s_2 <---> s_4$],
+    [$s_2$ (Porta 2) $<=====>$ $s_4$ (Porta 2)],
+    [Confirmado],
+    [Enlace 5],
+    [$s_2 <---> s_6$],
+    [$s_2$ (Porta 3) $<=====>$ $s_6$ (Porta 1)],
+    [Confirmado],
+    [Enlace 6],
+    [$s_3 <---> s_4$],
+    [$s_3$ (Porta 1) $<=====>$ $s_4$ (Porta 3)],
+    [Confirmado],
+    [Enlace 7],
+    [$s_3 <---> s_5$],
+    [$s_3$ (Porta 2) $<=====>$ $s_5$ (Porta 2)],
+    [Confirmado],
+    [Enlace 8],
+    [$s_4 <---> s_6$],
+    [$s_4$ (Porta 4) $<=====>$ $s_6$ (Porta 2)],
+    [Confirmado],
+    [Total de Hosts],
+    [6 Servidores ($h_1$ a $h_6$)],
+    [IPs 10.0.0.1 a 10.0.0.6 nas respectivas portas],
+    [100% Mapeado],
   ),
-  col-widths: (1.5fr, 2fr, 3.2fr, 1.2fr)
+  col-widths: (1.5fr, 2fr, 3.2fr, 1.2fr),
 )
 
 === Logs de Execução e Evidências Empíricas (Someloops)
@@ -400,19 +451,17 @@ A topologia *Someloops* apresenta alta densidade de malha, contendo múltiplos c
 
 A elaboração deste trabalho proporcionou uma sólida assimilação prática de conceitos teóricos que, frequentemente, permanecem abstratos em livros didáticos de redes de computadores:
 
-1. *A Desmistificação da "Inteligência" dos Switches:* Ao construir uma aplicação SDN no nível de controle, compreende-se na prática que um comutador OpenFlow é essencialmente um executor cego de instruções. Sem a injeção deliberada de pacotes LLDP pelo controlador, os switches permanecem em silêncio topológico.
-2. *A Importância da Contenção de Broadcast:* O experimento com as topologias *Triangle* e *Someloops* evidenciou o perigo letal de tempestades de broadcast. A decisão arquitetural de não realizar flooding e interceptar o Gratuitous ARP via `Packet-In` demonstrou como o paradigma SDN permite evitar loops sem os custos de latência e convergência do STP tradicional.
-3. *Engenharia de Ambientes e Desacoplamento:* Em sistemas modernos como o Arch Linux, lidar com versões heterogêneas de software (Ryu ancorado no ecossistema Python 3.9 versus Mininet integrado ao kernel mais recente) revelou uma das maiores virtudes do SDN: como o plano de controle e o plano de dados comunicam-se via sockets de rede abertos (TCP port 6633), eles podem residir em ambientes virtuais, sistemas operacionais ou máquinas físicas totalmente independentes.
-4. *Representação em Grafos como Base para Roteamento:* A representação das estruturas internas em NetworkX evidenciou como a visão centralizada de topologia pavimenta o caminho para a Parte 2 da disciplina, na qual algoritmos clássicos de grafos (como Dijkstra e Bellman-Ford) poderão ser empregados diretamente sobre esses nós e enlaces para o cálculo ótimo de fluxos e balanceamento de tráfego.
-
+1. *A Desmistificação da "Inteligência" dos Switches:* Ao construir uma aplicação SDN no nível de controle, compreende-se na prática que um comutador OpenFlow é essencialmente um executor cego de instruções. Sem a injeção deliberada de pacotes LLDP pelo controlador, os switches permanecem em silêncio no contexto topologico.
+2. *A Importância da Contenção de Broadcast:* O experimento com as topologias *Triangle* e *Someloops* evidenciou o perigo das tempestades de broadcast. A decisão arquitetural de não realizar flooding e interceptar o Gratuitous ARP via `Packet-In` demonstrou como o SDN permite evitar loops sem os custos de latência e convergência do STP tradicional.
+3. *Engenharia de Ambientes e Desacoplamento:* Em sistemas modernos como o Arch Linux, lidar com versões heterogêneas de software (Ryu ancorado no ecossistema Python 3.9 versus Mininet integrado ao kernel mais recente) revelou uma das maiores virtudes do SDN: como o plano de controle e o plano de dados comunicam-se via sockets de rede abertos (porta TCP 6633), eles podem residir em ambientes virtuais, sistemas operacionais ou máquinas físicas totalmente independentes.
+Foi o caso deste trabalho, onde o controlador Ryu rodava em um ambiente virtual com Python 3.9 (deu problema com o python do sistema na versão 3.15), enquanto o Mininet rodava diretamente no kernel do Arch Linux.
 ---
 
 = Conclusão
 
-O sistema desenvolvido atendeu integralmente a todos os requisitos estipulados na especificação da atividade. Foi possível:
-- Ler dinamicamente arquivos textuais com listas de arestas arbitrárias e instanciá-los com fidelidade no emulador Mininet;
-- Mapear com precisão cirúrgica 100% dos switches e enlaces físicos inter-switch através do protocolo LLDP habilitado pelo parâmetro `--observe-links`;
+Consideramos que o sistema desenvolvido atendeu aos requisitos da atividade. Foi possível:
+- Ler dinamicamente arquivos textuais com listas de arestas arbitrárias e instanciá-los no emulador Mininet;
+- Mapear com precisão todos os switches e enlaces físicos inter-switch através do protocolo LLDP habilitado pelo parâmetro `--observe-links`;
 - Localizar deterministicamente todos os computadores terminais via Gratuitous ARP e mensagens `Packet-In`, garantindo estabilidade e imunidade a loops nas topologias de teste;
-- Gerar artefatos visuais de alta definição via NetworkX e produzir uma documentação técnica reprodutível, didática e padronizada em Typst.
+- Gerar artefatos visuais com o  NetworkX e produzir uma documentação técnica reprodutível, didática e padronizada.
 
-A base de código estabelecida encontra-se pronta, testada e validada para servir como alicerce para as fases subsequentes de engenharia de tráfego, orquestração de rotas e aplicação de políticas de QoS.
